@@ -1,5 +1,6 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.api.tasks.testing.logging.TestLogEvent
+import io.papermc.paperweight.Git
 
 plugins {
     java
@@ -61,26 +62,46 @@ dependencies {
     paperclip("io.papermc:paperclip:3.0.3")
 }
 
+val paperDir = layout.projectDirectory.dir("work/Paper")
+val initSubmodules by tasks.registering {
+    outputs.upToDateWhen { false }
+    doLast {
+        Git(layout.projectDirectory)("submodule", "update", "--init").executeOut()
+    }
+}
+
 paperweight {
-    serverProject = project(":purpur-server")
+    serverProject = project(":Purpur-server")
 
     remapRepo = paperMavenPublicUrl
     decompileRepo = paperMavenPublicUrl
 
-    usePaperUpstream(providers.gradleProperty("paperCommit")) {
-        withPaperPatcher {
-            apiPatchDir = layout.projectDirectory.dir("patches/api")
-            apiOutputDir = layout.projectDirectory.dir("Purpur-API")
+    upstreams {
+        register("paper") {
+            upstreamDataTask {
+                dependsOn(initSubmodules)
+                projectDir = paperDir
+            }
 
-            serverPatchDir = layout.projectDirectory.dir("patches/server")
-            serverOutputDir = layout.projectDirectory.dir("Purpur-Server")
-        }
-
-        patchTasks.register("generatedApi") {
-            isBareDirectory = true
-            upstreamDirPath = "paper-api-generator/generated"
-            patchDir = layout.projectDirectory.dir("patches/generated-api")
-            outputDir = layout.projectDirectory.dir("paper-api-generator/generated")
+            patchTasks {
+                register("api") {
+                    upstreamDir = paperDir.dir("Paper-API")
+                    patchDir = layout.projectDirectory.dir("patches/api")
+                    outputDir = layout.projectDirectory.dir("Purpur-api")
+                }
+                register("server") {
+                    upstreamDir = paperDir.dir("Paper-Server")
+                    patchDir = layout.projectDirectory.dir("patches/server")
+                    outputDir = layout.projectDirectory.dir("Purpur-server")
+                    importMcDev = true
+                }
+                register("generatedApi") {
+                    isBareDirectory = true
+                    upstreamDir = paperDir.dir("paper-api-generator/generated")
+                    patchDir = layout.projectDirectory.dir("patches/generatedApi")
+                    outputDir = layout.projectDirectory.dir("paper-api-generator/generated")
+                }
+            }
         }
     }
 }
